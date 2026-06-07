@@ -37,6 +37,13 @@ def main() -> None:
     else:
         raise SystemExit("Could not reach Redis")
 
+    # Idle gracefully if keys aren't provided yet (avoids crash-looping before
+    # deploy/.env is filled in). Restart the container once keys are set.
+    if not os.getenv("ALPACA_API_KEY", "").strip() or not os.getenv("ALPACA_SECRET_KEY", "").strip():
+        log.warning("ALPACA_API_KEY/SECRET not set — pipeline idle. Add keys to deploy/.env and restart.")
+        while True:
+            time.sleep(3600)
+
     ingestor = AlpacaIngestor(store, symbols)
     log.info("Starting Alpaca ingestion for %s", ingestor.symbols)
     ingestor.run()
