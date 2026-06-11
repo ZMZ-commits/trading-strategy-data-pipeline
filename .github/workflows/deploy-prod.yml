@@ -53,8 +53,12 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: deploy
           key: ${{ secrets.SSH_KEY }}
+          envs: GHCR_TOKEN
           script: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u zmz-commits --password-stdin
             cd /opt/trading-platform/deploy
             docker compose pull ${{ env.SERVICE }}
             docker compose up -d ${{ env.SERVICE }}
             docker image prune -f
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
