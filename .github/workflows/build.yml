@@ -1,0 +1,83 @@
+# Prove the image builds. Do not push it, do not deploy it.
+#
+# This replaces deploy-dev.yml and deploy-staging.yml, which promised three
+# environments this repo does not have. The compose stack runs exactly ONE
+# pipeline service, because Alpaca's free tier permits a single WebSocket
+# stream -- so there is one container platform-wide, shared by all three
+# backends through Redis. Those two workflows targeted `data-pipeline-dev` and
+# `data-pipeline-stg`, neither of which exists, and had never run.
+#
+# The branch flow still earns its keep: feature -> dev -> staging -> main gives
+# review and promotion. Only main deploys, because there is only one thing to
+# deploy to. Three branches deploying to one container would be three branches
+# racing, and the last push would win regardless of what was promoted -- the
+# same reasoning terraform-apply.yml uses for applying infrastructure from main
+# alone.
+#
+# Building without pushing costs a minute of CI and no registry storage, which
+# is the point: catch a broken Dockerfile or an uninstallable dependency here
+# rather than on a push to main that is also a deploy.
+
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [dev, staging]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # push: false is the whole difference from deploy-prod.yml. The image is
+      # built and thrown away; nothing reaches ghcr and nothing reaches the VM.
+      - name: Build the image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: pipeline:ci
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # There is no test suite, so this is the cheapest real assurance
+      # available: every module is imported inside the built image. It catches
+      # a syntax error, a missing dependency, and a bad relative import -- the
+      # three ways this repo actually breaks.
+      #
+      # kafka_store is listed explicitly because main.py imports it lazily, so
+      # importing main alone would not prove confluent-kafka installed.
+      - name: Import every module inside the image
+        run: |
+          docker run --rm pipeline:ci python -c "
+          import src.main
+          import src.ingestion.alpaca_ws
+          import src.storage.redis_store
+          import src.storage.kafka_store
+          import src.storage.fanout
+          import src.transform.normalize
+          print('all modules import')
+          "
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Build"
+            echo
+            echo "Image built and imported. **Not** pushed and **not** deployed —"
+            echo "only \`main\` deploys, because there is one pipeline container."
+          } >> "$GITHUB_STEP_SUMMARY"
