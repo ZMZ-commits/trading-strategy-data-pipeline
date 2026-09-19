@@ -1,3 +1,6 @@
 alpaca-py>=0.30.0
 redis>=5.0.0
 python-dotenv>=1.0.0
+# Kafka producer. librdkafka under the hood, which is what the broker
+# round-trip was verified against (Kafka 4.3.1).
+confluent-kafka>=2.5.0

@@ -1,4 +1,4 @@
-name: Deploy → Prod (Hetzner)
+name: Deploy (Hetzner)
 
 on:
   push:
@@ -11,12 +11,22 @@ on:
 
 env:
   IMAGE: ghcr.io/zmz-commits/trading-strategy-data-pipeline
-  TAG: prod
-  SERVICE: data-pipeline-prod
+  # `latest`, not `prod`, and `pipeline`, not `data-pipeline-prod`.
+  #
+  # Both were wrong and had never been exercised -- this repo has no successful
+  # workflow run. The compose stack names the service `pipeline` and pulls
+  # `:latest`, so the deploy step reached for a service that does not exist and
+  # a tag nothing consumes. It would have failed on the first push to main.
+  #
+  # There is one pipeline container platform-wide, because Alpaca's free tier
+  # permits a single WebSocket stream. So there is no prod/stg/dev split to
+  # encode in a tag here; dev and staging build without deploying (build.yml).
+  TAG: latest
+  SERVICE: pipeline
 
 jobs:
   deploy:
-    name: Build, push to ghcr, deploy to Hetzner VM
+    name: Build, push to ghcr, deploy the single pipeline container
     runs-on: ubuntu-latest
     permissions:
       contents: read
