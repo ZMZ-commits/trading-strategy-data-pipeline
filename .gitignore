@@ -1,0 +1,10 @@
+
+# Real credentials. Never commit.
+.env
+.env.*
+!.env.example
+
+# Python bytecode. Generated on every run, machine-specific, and never wanted
+# in a repo whose build artifact is a container image.
+__pycache__/
+*.pyc
